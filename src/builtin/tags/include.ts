@@ -4,14 +4,14 @@ import BlockMode from '../../context/block-mode'
 export default {
   parse: function (token: TagToken) {
     const args = token.args
-    const tokenizer = new Tokenizer(args)
+    const tokenizer = new Tokenizer(args, this.liquid.options.operatorsTrie)
     this.file = this.liquid.options.dynamicPartials
       ? tokenizer.readValue()
       : tokenizer.readFileName()
     assert(this.file, () => `illegal argument "${token.args}"`)
 
     const begin = tokenizer.p
-    const withStr = tokenizer.readWord()
+    const withStr = tokenizer.readIdentifier()
     if (withStr.content === 'with') {
       tokenizer.skipBlank()
       if (tokenizer.peek() !== ':') {
@@ -24,6 +24,7 @@ export default {
   render: function * (ctx: Context, emitter: Emitter) {
     const { liquid, hash, withVar, file } = this
     const { renderer } = liquid
+    // TODO try move all liquid.parse calls into parse() section
     const filepath = ctx.opts.dynamicPartials
       ? (TypeGuards.isQuotedToken(file)
         ? yield renderer.renderTemplates(liquid.parse(evalQuotedToken(file)), ctx)

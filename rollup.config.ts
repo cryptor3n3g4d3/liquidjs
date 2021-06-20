@@ -57,7 +57,6 @@ const nodeEsm = {
   input
 }
 
-
 const browserEsm = {
   output: [{
     file: 'dist/liquid.browser.esm.js',
@@ -67,7 +66,7 @@ const browserEsm = {
   external: ['path', 'fs'],
   plugins: [
     replace({
-      include: './src/liquid.ts',
+      include: './src/liquid-options.ts',
       delimiters: ['', ''],
       './fs/node': './fs/browser'
     }),
@@ -96,7 +95,7 @@ const browserUmd = {
   }],
   plugins: [
     replace({
-      include: './src/liquid.ts',
+      include: './src/liquid-options.ts',
       delimiters: ['', ''],
       './fs/node': './fs/browser'
     }),
@@ -124,7 +123,7 @@ const browserMin = {
   }],
   plugins: [
     replace({
-      include: './src/liquid.ts',
+      include: './src/liquid-options.ts',
       delimiters: ['', ''],
       './fs/node': './fs/browser'
     }),

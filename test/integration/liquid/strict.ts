@@ -1,5 +1,9 @@
 import { Liquid } from '../../../src/liquid'
-import { expect } from 'chai'
+import * as chai from 'chai'
+import * as chaiAsPromised from 'chai-as-promised'
+
+chai.use(chaiAsPromised)
+const expect = chai.expect
 
 describe('LiquidOptions#strict*', function () {
   let engine: Liquid
@@ -29,5 +33,40 @@ describe('LiquidOptions#strict*', function () {
     }
     return expect(engine.parseAndRender(html, ctx, opts)).to
       .be.rejectedWith(/undefined variable: notdefined/)
+  })
+  describe('with strictVariables and lenientIf', function () {
+    const strictLenientOpts = {
+      strictVariables: true,
+      lenientIf: true
+    }
+    it('should not throw in `if` with a single variable', async function () {
+      const tpl = engine.parse('before{% if notdefined %}{{notdefined}}{% endif %}after')
+      const html = await engine.render(tpl, ctx, strictLenientOpts)
+      return expect(html).to.equal('beforeafter')
+    })
+    it('should support elsif with undefined variables', async function () {
+      const tpl = engine.parse('{% if notdefined1 %}a{% elsif notdefined2 %}b{% elsif defined3 %}{{defined3}}{% else %}d{% endif %}')
+      const html = await engine.render(tpl, { 'defined3': 'bla' }, strictLenientOpts)
+      return expect(html).to.equal('bla')
+    })
+    it('should not throw in `unless` with a single variable', async function () {
+      const tpl = engine.parse('before{% unless notdefined %}X{% else %}{{notdefined}}{% endunless %}after')
+      const html = await engine.render(tpl, ctx, strictLenientOpts)
+      return expect(html).to.equal('beforeXafter')
+    })
+    it('should still throw with an undefined variable in a compound `if` expression', function () {
+      const tpl = engine.parse('{% if notdefined == 15 %}a{% endif %}')
+      const fhtml = engine.render(tpl, ctx, strictLenientOpts)
+      return expect(fhtml).to.be.rejectedWith(/undefined variable: notdefined/)
+    })
+    it('should allow an undefined variable when before the `default` filter', async function () {
+      const tpl = engine.parse('{{notdefined | default: "a" | tolower}}')
+      const html = await engine.render(tpl, ctx, strictLenientOpts)
+      return expect(html).to.equal('a')
+    })
+    it('should not allow undefined variable even if `lenientIf` set', async function () {
+      const tpl = engine.parse('{{notdefined | tolower}}')
+      return expect(() => engine.renderSync(tpl, ctx, strictLenientOpts)).to.throw('undefined variable: notdefined')
+    })
   })
 })

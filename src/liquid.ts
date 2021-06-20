@@ -1,5 +1,4 @@
 import { Context } from './context/context'
-import * as fs from './fs/node'
 import { forOwn, snakeCase } from './util/underscore'
 import { Template } from './template/template'
 import { Tokenizer } from './parser/tokenizer'
@@ -13,9 +12,10 @@ import { TagMap } from './template/tag/tag-map'
 import { FilterMap } from './template/filter/filter-map'
 import { LiquidOptions, normalizeStringArray, NormalizedFullOptions, applyDefault, normalize } from './liquid-options'
 import { FilterImplOptions } from './template/filter/filter-impl-options'
-import { FS } from './fs/fs'
-import { toThenable, toValue } from './util/async'
+import { toPromise, toValue } from './util/async'
+import { Emitter } from './render/emitter'
 
+export * from './util/error'
 export * from './types'
 
 export class Liquid {
@@ -24,53 +24,52 @@ export class Liquid {
   public parser: Parser
   public filters: FilterMap
   public tags: TagMap
-  private fs: FS
 
   public constructor (opts: LiquidOptions = {}) {
     this.options = applyDefault(normalize(opts))
     this.parser = new Parser(this)
     this.renderer = new Render()
-    this.fs = opts.fs || fs
-    this.filters = new FilterMap(this.options.strictFilters)
+    this.filters = new FilterMap(this.options.strictFilters, this)
     this.tags = new TagMap()
 
     forOwn(builtinTags, (conf: TagImplOptions, name: string) => this.registerTag(snakeCase(name), conf))
     forOwn(builtinFilters, (handler: FilterImplOptions, name: string) => this.registerFilter(snakeCase(name), handler))
   }
   public parse (html: string, filepath?: string): Template[] {
-    const tokenizer = new Tokenizer(html, filepath)
+    const tokenizer = new Tokenizer(html, this.options.operatorsTrie, filepath)
     const tokens = tokenizer.readTopLevelTokens(this.options)
     return this.parser.parse(tokens)
   }
 
-  public _render (tpl: Template[], scope?: object, opts?: LiquidOptions, sync?: boolean): IterableIterator<string> {
+  public _render (tpl: Template[], scope?: object, opts?: LiquidOptions, sync?: boolean): IterableIterator<any> {
     const options = { ...this.options, ...normalize(opts) }
     const ctx = new Context(scope, options, sync)
-    return this.renderer.renderTemplates(tpl, ctx)
+    const emitter = new Emitter(options.keepOutputType)
+    return this.renderer.renderTemplates(tpl, ctx, emitter)
   }
-  public async render (tpl: Template[], scope?: object, opts?: LiquidOptions): Promise<string> {
-    return toThenable(this._render(tpl, scope, opts, false))
+  public async render (tpl: Template[], scope?: object, opts?: LiquidOptions): Promise<any> {
+    return toPromise(this._render(tpl, scope, opts, false))
   }
-  public renderSync (tpl: Template[], scope?: object, opts?: LiquidOptions): string {
+  public renderSync (tpl: Template[], scope?: object, opts?: LiquidOptions): any {
     return toValue(this._render(tpl, scope, opts, true))
   }
 
-  public _parseAndRender (html: string, scope?: object, opts?: LiquidOptions, sync?: boolean): IterableIterator<string> {
+  public _parseAndRender (html: string, scope?: object, opts?: LiquidOptions, sync?: boolean): IterableIterator<any> {
     const tpl = this.parse(html)
     return this._render(tpl, scope, opts, sync)
   }
-  public async parseAndRender (html: string, scope?: object, opts?: LiquidOptions): Promise<string> {
-    return toThenable(this._parseAndRender(html, scope, opts, false))
+  public async parseAndRender (html: string, scope?: object, opts?: LiquidOptions): Promise<any> {
+    return toPromise(this._parseAndRender(html, scope, opts, false))
   }
-  public parseAndRenderSync (html: string, scope?: object, opts?: LiquidOptions): string {
+  public parseAndRenderSync (html: string, scope?: object, opts?: LiquidOptions): any {
     return toValue(this._parseAndRender(html, scope, opts, true))
   }
 
   public * _parseFile (file: string, opts?: LiquidOptions, sync?: boolean) {
     const options = { ...this.options, ...normalize(opts) }
-    const paths = options.root.map(root => this.fs.resolve(root, file, options.extname))
-    if (this.fs.fallback !== undefined) {
-      const filepath = this.fs.fallback(file)
+    const paths = options.root.map(root => options.fs.resolve(root, file, options.extname))
+    if (options.fs.fallback !== undefined) {
+      const filepath = options.fs.fallback(file)
       if (filepath !== undefined) paths.push(filepath)
     }
 
@@ -80,15 +79,15 @@ export class Liquid {
         const tpls = yield cache.read(filepath)
         if (tpls) return tpls
       }
-      if (!(sync ? this.fs.existsSync(filepath) : yield this.fs.exists(filepath))) continue
-      const tpl = this.parse(sync ? this.fs.readFileSync(filepath) : yield this.fs.readFile(filepath), filepath)
+      if (!(sync ? options.fs.existsSync(filepath) : yield options.fs.exists(filepath))) continue
+      const tpl = this.parse(sync ? options.fs.readFileSync(filepath) : yield options.fs.readFile(filepath), filepath)
       if (cache) cache.write(filepath, tpl)
       return tpl
     }
     throw this.lookupError(file, options.root)
   }
   public async parseFile (file: string, opts?: LiquidOptions): Promise<Template[]> {
-    return toThenable(this._parseFile(file, opts, false))
+    return toPromise(this._parseFile(file, opts, false))
   }
   public parseFileSync (file: string, opts?: LiquidOptions): Template[] {
     return toValue(this._parseFile(file, opts, true))
@@ -98,17 +97,16 @@ export class Liquid {
     return this.render(templates, ctx, opts)
   }
   public renderFileSync (file: string, ctx?: object, opts?: LiquidOptions) {
-    const options = normalize(opts)
-    const templates = this.parseFileSync(file, options)
+    const templates = this.parseFileSync(file, opts)
     return this.renderSync(templates, ctx, opts)
   }
 
   public _evalValue (str: string, ctx: Context): IterableIterator<any> {
-    const value = new Value(str, this.filters)
-    return value.value(ctx)
+    const value = new Value(str, this)
+    return value.value(ctx, false)
   }
   public async evalValue (str: string, ctx: Context): Promise<any> {
-    return toThenable(this._evalValue(str, ctx))
+    return toPromise(this._evalValue(str, ctx))
   }
   public evalValueSync (str: string, ctx: Context): any {
     return toValue(this._evalValue(str, ctx))

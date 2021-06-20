@@ -5,12 +5,12 @@ import { Tokenizer } from '../../parser/tokenizer'
 
 export default {
   parse: function (tagToken: TagToken, remainTokens: TopLevelToken[]) {
-    const tokenizer = new Tokenizer(tagToken.args)
+    const tokenizer = new Tokenizer(tagToken.args, this.liquid.options.operatorsTrie)
 
-    this.variable = tokenizer.readWord()
+    this.variable = tokenizer.readIdentifier()
     tokenizer.skipBlank()
 
-    const tmp = tokenizer.readWord()
+    const tmp = tokenizer.readIdentifier()
     assert(tmp && tmp.content === 'in', () => `illegal tag: ${tagToken.getText()}`)
 
     this.collection = tokenizer.readValue()

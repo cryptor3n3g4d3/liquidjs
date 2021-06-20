@@ -6,10 +6,10 @@ import { Hash } from '../../template/tag/hash'
 export default {
   type: 'block',
   parse: function (token: TagToken, remainTokens: TopLevelToken[]) {
-    const toknenizer = new Tokenizer(token.args)
+    const toknenizer = new Tokenizer(token.args, this.liquid.options.operatorsTrie)
 
-    const variable = toknenizer.readWord()
-    const inStr = toknenizer.readWord()
+    const variable = toknenizer.readIdentifier()
+    const inStr = toknenizer.readIdentifier()
     const collection = toknenizer.readValue()
     assert(
       variable.size() && inStr.content === 'in' && collection,
