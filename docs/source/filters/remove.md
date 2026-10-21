@@ -2,6 +2,8 @@
 title: remove
 ---
 
+{% since %}v1.9.1{% endsince %}
+
 Removes every occurrence of the specified substring from a string.
 
 Input
@@ -11,5 +13,5 @@ Input
 
 Output
 ```text
-I strained to see the t through the 
+I sted to see the t through the 
 ```

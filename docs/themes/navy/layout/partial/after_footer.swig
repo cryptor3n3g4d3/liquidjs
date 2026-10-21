@@ -1,6 +1,11 @@
 {% if page.layout === 'playground' %}
-<script src="https://cdn.jsdelivr.net/npm/liquidjs/dist/liquid.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/ace-builds@1.4.8/src-min/ace.js"></script>
+{{ js('js/liquid.browser.min.js') }}
+<script src="https://cdn.jsdelivr.net/npm/ace-builds@1.22.0/src-min/ace.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ace-builds@1.22.0/src-min/mode-liquid.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ace-builds@1.22.0/src-min/mode-json.js"></script>
+<script>ace.config.set('basePath', 'https://cdn.jsdelivr.net/npm/ace-builds@1.22.0/src-min/');</script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-markup.min.js"></script>
 {% endif %}
 
 {{ js('js/main') }}
@@ -9,9 +14,18 @@
 <script>
 document.getElementById('search-input-wrap').classList.add('on');
 docsearch({
-apiKey: '01f36cc168657a26a385308b9e721bc6',
+appId: '{{ config.algolia.applicationID }}',
+apiKey: '{{ config.algolia.apiKey }}',
 indexName: 'liquidjs',
 inputSelector: '#search-input',
 debug: false
 });
+</script>
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-GM713991QQ"></script>
+<script type="text/plain" data-category="analytics">
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-GM713991QQ');
 </script>

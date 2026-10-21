@@ -1,9 +1,8 @@
-export abstract class Drop {
-  public valueOf (): any {
-    return undefined
-  }
+import { Context } from '../context'
 
-  public liquidMethodMissing (key: string): Promise<string | undefined> | string | undefined {
+export abstract class Drop {
+  [key: string]: any
+  public liquidMethodMissing (key: string | number, context: Context): Promise<any> | any {
     return undefined
   }
 }

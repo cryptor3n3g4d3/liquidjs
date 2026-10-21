@@ -1,0 +1,19 @@
+{
+  "name": "liquidjs-demo-nodejs",
+  "description": "Node.js demo for liquidjs",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node dist/index.js",
+    "test": "./test.sh",
+    "build": "webpack"
+  },
+  "dependencies": {
+    "hello-liquid": "^1.0.0",
+    "liquidjs": "latest"
+  },
+  "devDependencies": {
+    "webpack": "^5.74.0",
+    "webpack-cli": "^4.10.0"
+  }
+}

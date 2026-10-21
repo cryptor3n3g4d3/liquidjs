@@ -2,12 +2,14 @@
 
 'use strict'
 
+require('./prism-bash-extend')
+
 const { resolve, basename } = require('path')
 const { readFileSync } = require('fs')
 const cheerio = require('cheerio')
 const fullUrlFor = hexo.extend.helper.get('full_url_for').bind(hexo)
 
-const localizedPath = ['tutorials', 'filters', 'tags', 'playground', 'api']
+const localizedPath = ['tutorials', 'filters', 'tags', 'playground']
 
 hexo.extend.helper.register('page_nav', function () {
   const type = this.page.canonical_path.split('/')[0]
@@ -37,7 +39,12 @@ hexo.extend.helper.register('page_nav', function () {
 })
 
 hexo.extend.helper.register('raw', function (filepath) {
-  const content = readFileSync(resolve(this.view_dir, filepath))
+  const content = readFileSync(resolve(this.view_dir, filepath), 'utf8')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
   return content
 })
 

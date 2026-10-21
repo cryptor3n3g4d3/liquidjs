@@ -10,13 +10,17 @@ index:
   get_started: Get Started
   contributors:
     title: Contributors
-    description: 'LiquidJS follows the <a href="https://github.com/all-contributors/all-contributors">all-contributors</a> specification, see <a href="tutorials/contribution-guidelines.html">guildelines here</a>! Thanks goes to these wonderful people:'
+    description: 'Thanks to these wonderful people! See <a href="tutorials/contribution-guidelines.html">contribution guidelines</a> if you&#39;d like to help.'
   sponsors:
-    title: Backers
-    description: 'Love LiquidJS and want to contribute? <a href="https://opencollective.com/liquidjs">Become a backer</a>. Find out more <a href="tutorials/contribution-guidelines.html#Financial-Support">how to contribute</a>!'
+    title: Sponsors
+    description: 'Organizations and individuals who <a href="https://github.com/sponsors/harttle">sponsor LiquidJS</a>. Thank you!'
+  used_by:
+    title: Used by
+    description: 'Products and projects running on LiquidJS. <a href="https://github.com/harttle/liquidjs/edit/master/README.md">Open a PR</a> to add yours.'
 
 playground:
   title: Playground
+  lead: Edit a template and context JSON — rendered HTML updates as you type.
   loading: Loading...
 
 page:
@@ -40,11 +44,19 @@ sidebar:
 
     advanced: Advanced
     caching: Caching
-    registeration: Register Filters/Tags
+    escaping: Escaping
+    registration: Register Filters/Tags
+    access_scope_in_filters: Access Scope in Filters
+    parse_parameters: Parse Parameters
+    render_tag_content: Render Tag Content
+    drops: Liquid Drops
+    sync_and_async: Sync and Async
     whitespace: Whitespace Control
     plugins: Plugins
     operators: Operators
     truth: Truthy and Falsy
+    security_model: Security Model
+    static_analysis: Static Analysis
 
     miscellaneous: Miscellaneous
     migration9: 'Migrate to LiquidJS 9'
@@ -55,10 +67,5 @@ sidebar:
     overview: Overview
   tags:
     overview: Overview
-  api:
-    quick_entry: Quick Entry
-    classes: Classes
-    enums: Enums
-    interfaces: Interfaces
 footer:
-  license: 'Documentation licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>.'
+  license: 'Documentation licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>.'

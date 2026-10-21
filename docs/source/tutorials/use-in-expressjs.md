@@ -2,7 +2,7 @@
 title: Use in Express.js
 ---
 
-LiquidJS is compatible to the [express template engines](https://expressjs.com/en/resources/template-engines.html). You can set liquidjs instance to the [view engine][express-views] option:
+LiquidJS is compatible with [Express template engines](https://expressjs.com/en/resources/template-engines.html). You can set the LiquidJS instance as the [view engine][express-views] option:
 
 ```javascript
 var { Liquid } = require('liquidjs');
@@ -50,7 +50,7 @@ res.render('world')
 
 ## Caching
 
-Simply setting the [cache option][cache] to true will enable template caching, as explained in [Caching][Caching]. It's recommended to enable cache in production environment, which can be done by:
+Simply setting the [cache option][cache] to true will enable template caching, as explained in [Caching][Caching]. It's recommended to enable cache in a production environment, which can be done by:
 
 ```javascript
 var { Liquid } = require('liquidjs');
@@ -59,12 +59,12 @@ var engine = new Liquid({
 });
 ```
 
-[cache]: ../api/interfaces/liquid_options_.liquidoptions.html#Optional-cache
-[express-views]: http://expressjs.com/en/guide/using-template-engines.html
-[parseFile]: ../api/classes/liquid_.liquid.html#parseFile
-[parseFileSync]: ../api/classes/liquid_.liquid.html#parseFileSync
+[cache]: /api/interfaces/LiquidOptions.html#cache
+[express-views]: https://expressjs.com/en/guide/using-template-engines.html
+[parseFile]: /api/classes/Liquid.html#parseFile
+[parseFileSync]: /api/classes/Liquid.html#parseFileSync
 [layout]: https://help.shopify.com/en/themes/liquid/tags/theme-tags#layout
 [include]: https://help.shopify.com/themes/liquid/tags/theme-tags#include
-[root]: ../api/interfaces/liquid_options_.liquidoptions.html#Optional-root
+[root]: /api/interfaces/LiquidOptions.html#root
 [render-a-file]: ./render-a-file.html
 [Caching]: ./caching.html

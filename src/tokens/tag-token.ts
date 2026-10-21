@@ -1,12 +1,11 @@
 import { DelimitedToken } from './delimited-token'
-import { BLANK, TYPES, VARIABLE } from '../util/character'
-import { TokenizationError } from '../util/error'
-import { NormalizedFullOptions } from '../liquid-options'
-import { TokenKind } from '../parser/token-kind'
+import { Tokenizer, TokenKind } from '../parser'
+import type { NormalizedFullOptions } from '../liquid-options'
 
 export class TagToken extends DelimitedToken {
   public name: string
-  public args: string
+  public tokenizer: Tokenizer
+  public readonly args: string;
   public constructor (
     input: string,
     begin: number,
@@ -15,16 +14,13 @@ export class TagToken extends DelimitedToken {
     file?: string
   ) {
     const { trimTagLeft, trimTagRight, tagDelimiterLeft, tagDelimiterRight } = options
-    const value = input.slice(begin + tagDelimiterLeft.length, end - tagDelimiterRight.length)
-    super(TokenKind.Tag, value, input, begin, end, trimTagLeft, trimTagRight, file)
+    const [valueBegin, valueEnd] = [begin + tagDelimiterLeft.length, end - tagDelimiterRight.length]
+    super(TokenKind.Tag, [valueBegin, valueEnd], input, begin, end, trimTagLeft, trimTagRight, file)
 
-    let nameEnd = 0
-    while (TYPES[this.content.charCodeAt(nameEnd)] & VARIABLE) nameEnd++
-    this.name = this.content.slice(0, nameEnd)
-    if (!this.name) throw new TokenizationError(`illegal tag syntax`, this)
-
-    let argsBegin = nameEnd
-    while (TYPES[this.content.charCodeAt(argsBegin)] & BLANK) argsBegin++
-    this.args = this.content.slice(argsBegin)
+    this.tokenizer = new Tokenizer(input, options.operators, file, this.contentRange, options.groupedExpressions)
+    this.name = this.tokenizer.readTagName()
+    this.tokenizer.assert(this.name, `illegal tag syntax, tag name expected`)
+    this.tokenizer.skipBlank()
+    this.args = this.tokenizer.input.slice(this.tokenizer.p, this.contentRange[1])
   }
 }

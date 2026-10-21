@@ -6,12 +6,11 @@
     "sourceMap": true,
     "outDir": "dist",
     "declaration": true,
+    "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
-    "downlevelIteration": true,
-    "strict": true,
-    "suppressImplicitAnyIndexErrors": true
+    "strict": true
   },
   "all": true,
-  "exclude": [ "node_modules", "dist", "demo" ]
+  "exclude": [ "node_modules", "dist", "demo", "test" ]
 }

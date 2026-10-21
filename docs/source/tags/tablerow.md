@@ -1,6 +1,8 @@
 ---
-title: Table Row
+title: tablerow
 ---
+
+{% since %}v1.9.1{% endsince %}
 
 Generates an HTML table. Must be wrapped in opening `<table>` and closing `</table>` HTML tags.
 
@@ -86,7 +88,7 @@ Output
 
 ### limit
 
-Exits the tablerow after a specific index.
+Exits the `tablerow` after a specific index.
 
 ```liquid
 {% tablerow product in collection.products cols:2 limit:3 %}
@@ -96,7 +98,7 @@ Exits the tablerow after a specific index.
 
 ### offset
 
-Starts the tablerow after a specific index.
+Starts the `tablerow` after a specific index.
 
 ```liquid
 {% tablerow product in collection.products cols:2 offset:3 %}

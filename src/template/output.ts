@@ -1,20 +1,33 @@
 import { Value } from './value'
-import { FilterMap } from './filter/filter-map'
-import { stringify, toValue } from '../util/underscore'
-import { TemplateImpl } from '../template/template-impl'
-import { Template } from '../template/template'
+import { Arguments, Template, TemplateImpl } from '../template'
 import { Context } from '../context/context'
-import { Emitter } from '../render/emitter'
+import { Emitter } from '../emitters/emitter'
 import { OutputToken } from '../tokens/output-token'
+import { Tokenizer } from '../parser'
+import { Liquid } from '../liquid'
+import { Filter } from './filter'
+import { FilterToken } from '../tokens'
+import { toValue } from '../util'
 
 export class Output extends TemplateImpl<OutputToken> implements Template {
-  private value: Value
-  public constructor (token: OutputToken, filters: FilterMap) {
+  value: Value
+  public constructor (token: OutputToken, liquid: Liquid) {
     super(token)
-    this.value = new Value(token.content, filters)
+    const tokenizer = new Tokenizer(token.input, liquid.options.operators, token.file, token.contentRange, liquid.options.groupedExpressions)
+    this.value = new Value(tokenizer.readFilteredValue(), liquid)
+    const filters = this.value.filters
+    const outputEscape = liquid.options.outputEscape
+    if (!filters[filters.length - 1]?.raw && outputEscape) {
+      const token = new FilterToken(toString.call(outputEscape), [], '', 0, 0)
+      filters.push(new Filter(token, outputEscape, liquid))
+    }
   }
-  public * render (ctx: Context, emitter: Emitter) {
-    const val = yield this.value.value(ctx)
-    emitter.write(stringify(toValue(val)))
+  public * render (ctx: Context, emitter: Emitter): IterableIterator<unknown> {
+    const val = yield toValue(yield this.value.value(ctx, false))
+    emitter.write(val)
+  }
+
+  public * arguments (): Arguments {
+    yield this.value
   }
 }

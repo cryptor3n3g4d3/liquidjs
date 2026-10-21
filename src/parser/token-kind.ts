@@ -11,5 +11,7 @@ export enum TokenKind {
   Range = 512,
   Quoted = 1024,
   Operator = 2048,
+  FilteredValue = 4096,
+  GroupedExpression = 8192,
   Delimited = Tag | Output
 }

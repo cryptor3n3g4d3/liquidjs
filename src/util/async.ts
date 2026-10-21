@@ -1,75 +1,59 @@
-import { isFunction } from './underscore'
+import { isPromise, isIterator } from './underscore'
 
-type resolver = (x?: any) => any
+export type LiquidAsync<F extends (...args: any[]) => any> =
+  (sync: boolean, ...args: Parameters<F>) => ReturnType<F> | Promise<ReturnType<F>>
 
-interface Thenable {
-  then (resolve: resolver, reject?: resolver): Thenable;
-  catch (reject: resolver): Thenable;
-}
-
-function mkResolve (value: any) {
-  const ret = {
-    then: (resolve: resolver) => resolve(value),
-    catch: () => ret
+export function toLiquidAsync<F extends (...args: any[]) => any> (
+  asyncFn: (...args: Parameters<F>) => Promise<ReturnType<F>>,
+  syncFn?: F
+): LiquidAsync<F> {
+  const syncImpl = syncFn || asyncFn as any
+  return (sync: boolean, ...args: any[]) => {
+    return sync ? syncImpl(...args as Parameters<F>) : asyncFn(...args as Parameters<F>)
   }
-  return ret
 }
 
-function mkReject (err: Error) {
-  const ret = {
-    then: (resolve: resolver, reject?: resolver) => {
-      if (reject) return reject(err)
-      return ret
-    },
-    catch: (reject: resolver) => reject(err)
-  }
-  return ret
-}
-
-function isThenable (val: any): val is Thenable {
-  return val && isFunction(val.then)
-}
-
-function isCustomIterable (val: any): val is IterableIterator<any> {
-  return val && isFunction(val.next) && isFunction(val.throw) && isFunction(val.return)
-}
-
-export function toThenable (val: IterableIterator<any> | Thenable | any): Thenable {
-  if (isThenable(val)) return val
-  if (isCustomIterable(val)) return reduce()
-  return mkResolve(val)
-
-  function reduce (prev?: any): Thenable {
-    let state
+// convert an async iterator to a Promise
+export async function toPromise<T> (val: Generator<unknown, T, unknown> | Promise<T> | T): Promise<T> {
+  if (!isIterator(val)) return val
+  let value: unknown
+  let done = false
+  let next: 'next' | 'throw' = 'next'
+  do {
+    const state = val[next](value)
+    done = !!state.done
+    value = state.value
+    next = 'next'
     try {
-      state = (val as IterableIterator<any>).next(prev)
+      if (isIterator(value)) value = toPromise(value)
+      if (isPromise(value)) value = await value
     } catch (err) {
-      return mkReject(err)
+      next = 'throw'
+      value = err
     }
-
-    if (state.done) return mkResolve(state.value)
-    return toThenable(state.value!).then(reduce, err => {
-      let state
-      try {
-        state = (val as IterableIterator<any>).throw!(err)
-      } catch (e) {
-        return mkReject(e)
-      }
-      if (state.done) return mkResolve(state.value)
-      return reduce(state.value)
-    })
-  }
+  } while (!done)
+  return value as T
 }
 
-export function toValue (val: IterableIterator<any> | Thenable | any) {
-  let ret: any
-  toThenable(val)
-    .then((x: any) => {
-      ret = x
-      return mkResolve(ret)
-    })
-    .catch((err: Error) => {
-      throw err
-    })
-  return ret
+// convert an async iterator to a value in a synchronous manner
+export function toValueSync<T> (val: Generator<unknown, T, unknown> | T): T {
+  if (!isIterator(val)) return val
+  let value: any
+  let done = false
+  let next: 'next' | 'throw' = 'next'
+  do {
+    const state = val[next](value)
+    done = !!state.done
+    value = state.value
+    next = 'next'
+    if (isIterator(value)) {
+      try {
+        value = toValueSync(value)
+      } catch (err) {
+        next = 'throw'
+        value = err
+      }
+    }
+  } while (!done)
+  return value
 }

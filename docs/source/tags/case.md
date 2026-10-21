@@ -2,7 +2,9 @@
 title: case
 ---
 
-Creates a switch statement to compare a variable with different values. `case` initializes the switch statement, and `when` compares its values.
+{% since %}v1.9.1{% endsince %}
+
+Creates a switch statement to compare a variable with different values. `case` initializes the switch statement, and `when` tags compare values.
 
 Input
 ```liquid
@@ -10,10 +12,10 @@ Input
 {% case handle %}
   {% when "cake" %}
      This is a cake
-  {% when "cookie" %}
+  {% when "cookie", "biscuit" %}
      This is a cookie
   {% else %}
-     This is not a cake nor a cookie
+     This is neither a cake nor a cookie
 {% endcase %}
 ```
 

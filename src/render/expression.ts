@@ -1,86 +1,110 @@
-import { QuotedToken } from '../tokens/quoted-token'
-import { NumberToken } from '../tokens/number-token'
-import { assert } from '../util/assert'
-import { literalValues } from '../util/literal'
-import { LiteralToken } from '../tokens/literal-token'
-import * as TypeGuards from '../util/type-guards'
-import { Token } from '../tokens/token'
-import { OperatorToken } from '../tokens/operator-token'
-import { RangeToken } from '../tokens/range-token'
-import { parseStringLiteral } from '../parser/parse-string-literal'
-import { Context } from '../context/context'
-import { range, toValue } from '../util/underscore'
-import { Tokenizer } from '../parser/tokenizer'
-import { operatorImpls } from '../render/operator'
+import { QuotedToken, RangeToken, OperatorToken, Token, PropertyAccessToken, OperatorType, operatorTypes, FilteredValueToken } from '../tokens'
+import { isRangeToken, isPropertyAccessToken, isFilteredValueToken, UndefinedVariableError, range, isOperatorToken, assert, toValue } from '../util'
+import type { Context } from '../context'
+import type { UnaryOperatorHandler } from '../render'
+import { Drop } from '../drop'
+import { Filter } from '../template/filter'
 
 export class Expression {
-  private operands: any[] = []
-  private postfix: IterableIterator<Token>
+  readonly postfix: Token[]
 
-  public constructor (str: string) {
-    const tokenizer = new Tokenizer(str)
-    this.postfix = toPostfix(tokenizer.readExpression())
+  public constructor (tokens: Iterable<Token>) {
+    this.postfix = [...toPostfix(tokens)]
   }
-  public evaluate (ctx: Context): any {
+  public * evaluate (ctx: Context, lenient?: boolean): Generator<unknown, unknown, unknown> {
+    assert(ctx, 'unable to evaluate: context not defined')
+    const operands: any[] = []
     for (const token of this.postfix) {
-      if (TypeGuards.isOperatorToken(token)) {
-        const r = this.operands.pop()
-        const l = this.operands.pop()
-        const result = evalOperatorToken(token, l, r)
-        this.operands.push(result)
+      if (isOperatorToken(token)) {
+        const r = operands.pop()
+        let result
+        if (operatorTypes[token.operator] === OperatorType.Unary) {
+          result = yield (ctx.opts.operators[token.operator] as UnaryOperatorHandler)(r, ctx)
+        } else {
+          const l = operands.pop()
+          result = yield ctx.opts.operators[token.operator](l, r, ctx)
+        }
+        operands.push(result)
       } else {
-        this.operands.push(evalToken(token, ctx))
+        operands.push(yield evalToken(token, ctx, lenient))
       }
     }
-    return this.operands[0]
+    return operands[0]
   }
-  public * value (ctx: Context) {
-    return toValue(this.evaluate(ctx))
+  public valid () {
+    return !!this.postfix.length
   }
 }
 
-export function evalToken (token: Token | undefined, ctx: Context): any {
-  assert(ctx, () => 'unable to evaluate: context not defined')
-  if (TypeGuards.isPropertyAccessToken(token)) {
-    const variable = token.variable.getText()
-    const props: string[] = token.props.map(prop => evalToken(prop, ctx))
-    return ctx.get([variable, ...props])
-  }
-  if (TypeGuards.isRangeToken(token)) return evalRangeToken(token, ctx)
-  if (TypeGuards.isLiteralToken(token)) return evalLiteralToken(token)
-  if (TypeGuards.isNumberToken(token)) return evalNumberToken(token)
-  if (TypeGuards.isWordToken(token)) return token.getText()
-  if (TypeGuards.isQuotedToken(token)) return evalQuotedToken(token)
+/**
+ * Evaluate `token`, preserving Drops.
+ * Operators use this so `Comparable` drops (`empty`, `nil`, `blank`) and custom drops
+ * are compared as drops rather than as their `valueOf()` result.
+ */
+export function * evalToken (token: Token | undefined, ctx: Context, lenient = false): IterableIterator<unknown> {
+  if (!token) return
+  if ('content' in token) return token.content
+  if (isPropertyAccessToken(token)) return yield evalPropertyAccessToken(token, ctx, lenient)
+  if (isRangeToken(token)) return yield evalRangeToken(token, ctx)
+  if (isFilteredValueToken(token)) return yield evalFilteredValueToken(token, ctx, lenient)
 }
 
-function evalNumberToken (token: NumberToken) {
-  const str = token.whole.content + '.' + (token.decimal ? token.decimal.content : '')
-  return Number(str)
+function * evalFilteredValueToken (token: FilteredValueToken, ctx: Context, lenient: boolean): IterableIterator<unknown> {
+  assert(ctx.liquid, 'FilteredValueToken evaluation requires liquid instance in context')
+  lenient = lenient || (ctx.opts.lenientIf && token.filters.length > 0 && token.filters[0].name === 'default')
+  let val = yield token.initial.evaluate(ctx, lenient)
+
+  for (const filterToken of token.filters) {
+    const filterImpl = ctx.liquid.filters[filterToken.name]
+    assert(filterImpl || !ctx.liquid.options.strictFilters, () => `undefined filter: ${filterToken.name}`)
+    const filter = new Filter(filterToken, filterImpl, ctx.liquid)
+    val = yield filter.render(val, ctx)
+  }
+
+  return val
+}
+
+/**
+ * Evaluate `token` to the value filters and tags consume.
+ * Awaits a promise returned by `Drop.valueOf()`.
+ */
+export function * evalTokenValue (token: Token | undefined, ctx: Context, lenient = false): IterableIterator<unknown> {
+  return yield toValue(yield evalToken(token, ctx, lenient))
+}
+
+function * evalPropertyAccessToken (token: PropertyAccessToken, ctx: Context, lenient: boolean): IterableIterator<unknown> {
+  const props: (string | number | Drop)[] = []
+  for (const prop of token.props) {
+    props.push((yield evalTokenValue(prop, ctx, false)) as unknown as string | number | Drop)
+  }
+  try {
+    if (token.variable) {
+      const variable = yield evalToken(token.variable, ctx, lenient)
+      return yield ctx._getFromScope(variable, props)
+    } else {
+      return yield ctx._get(props)
+    }
+  } catch (e) {
+    if (lenient && (e as Error).name === 'InternalUndefinedVariableError') return null
+    throw (new UndefinedVariableError(e as Error, token))
+  }
 }
 
 export function evalQuotedToken (token: QuotedToken) {
-  return parseStringLiteral(token.getText())
+  return token.content
 }
 
-function evalOperatorToken (token: OperatorToken, lhs: any, rhs: any) {
-  const impl = operatorImpls[token.operator]
-  return impl(lhs, rhs)
-}
-
-function evalLiteralToken (token: LiteralToken) {
-  return literalValues[token.literal]
-}
-
-function evalRangeToken (token: RangeToken, ctx: Context) {
-  const low: number = evalToken(token.lhs, ctx)
-  const high: number = evalToken(token.rhs, ctx)
+function * evalRangeToken (token: RangeToken, ctx: Context): IterableIterator<unknown> {
+  const low = (yield evalTokenValue(token.lhs, ctx)) as unknown as number
+  const high = (yield evalTokenValue(token.rhs, ctx)) as unknown as number
+  ctx.memoryLimit.use(high - low + 1)
   return range(+low, +high + 1)
 }
 
-function * toPostfix (tokens: IterableIterator<Token>): IterableIterator<Token> {
+function * toPostfix (tokens: Iterable<Token>): IterableIterator<Token> {
   const ops: OperatorToken[] = []
   for (const token of tokens) {
-    if (TypeGuards.isOperatorToken(token)) {
+    if (isOperatorToken(token)) {
       while (ops.length && ops[ops.length - 1].getPrecedence() > token.getPrecedence()) {
         yield ops.pop()!
       }

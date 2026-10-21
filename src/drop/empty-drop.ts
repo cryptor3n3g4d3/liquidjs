@@ -1,9 +1,11 @@
 import { Drop } from './drop'
 import { Comparable } from './comparable'
-import { isObject, isString, isArray } from '../util/underscore'
+import { isObject, isString, isArray, toValue } from '../util'
 
 export class EmptyDrop extends Drop implements Comparable {
-  public equals (value: any) {
+  public * equals (value: any): Generator<unknown, boolean, any> {
+    if (value instanceof EmptyDrop) return false
+    value = yield toValue(value)
     if (isString(value) || isArray(value)) return value.length === 0
     if (isObject(value)) return Object.keys(value).length === 0
     return false
@@ -22,5 +24,8 @@ export class EmptyDrop extends Drop implements Comparable {
   }
   public valueOf () {
     return ''
+  }
+  static is (value: unknown) {
+    return value instanceof EmptyDrop
   }
 }

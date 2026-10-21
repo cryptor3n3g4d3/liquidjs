@@ -1,66 +1,54 @@
 import { changeCase, padStart, padEnd } from './underscore'
+import { LiquidDate } from './liquid-date'
+import type { Limiter } from './limiter'
 
 const rFormat = /%([-_0^#:]+)?(\d+)?([EO])?(.)/
-const monthNames = [
-  'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
-  'September', 'October', 'November', 'December'
-]
-const dayNames = [
-  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
-]
-const monthNamesShort = monthNames.map(abbr)
-const dayNamesShort = dayNames.map(abbr)
-const suffixes = {
-  1: 'st',
-  2: 'nd',
-  3: 'rd',
-  'default': 'th'
-}
 interface FormatOptions {
-  flags: object;
+  flags: Record<string, boolean>;
   width?: string;
   modifier?: string;
-}
-
-function abbr (str: string) {
-  return str.slice(0, 3)
+  memoryLimit?: Pick<Limiter, 'use'>;
 }
 
 // prototype extensions
-function daysInMonth (d: Date) {
+function daysInMonth (d: LiquidDate) {
   const feb = isLeapYear(d) ? 29 : 28
   return [31, feb, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 }
-function getDayOfYear (d: Date) {
+function getDayOfYear (d: LiquidDate) {
   let num = 0
   for (let i = 0; i < d.getMonth(); ++i) {
     num += daysInMonth(d)[i]
   }
   return num + d.getDate()
 }
-function getWeekOfYear (d: Date, startDay: number) {
-  // Skip to startDay of this week
-  const now = getDayOfYear(d) + (startDay - d.getDay())
-  // Find the first startDay of the year
-  const jan1 = new Date(d.getFullYear(), 0, 1)
-  const then = (7 - jan1.getDay() + startDay)
-  return String(Math.floor((now - then) / 7) + 1)
+function getWeekOfYear (d: LiquidDate, startDay: number) {
+  // Days before the first startDay of the year belong to week 0
+  const daysSinceStartDay = (d.getDay() - startDay + 7) % 7
+  return String(Math.floor((getDayOfYear(d) - 1 - daysSinceStartDay + 7) / 7))
 }
-function isLeapYear (d: Date) {
+function isLeapYear (d: LiquidDate) {
   const year = d.getFullYear()
   return !!((year & 3) === 0 && (year % 100 || (year % 400 === 0 && year)))
 }
-function getSuffix (d: Date) {
-  const str = d.getDate().toString()
-  const index = parseInt(str.slice(-1))
-  return suffixes[index] || suffixes['default']
+function ordinal (d: LiquidDate) {
+  const date = d.getDate()
+  if ([11, 12, 13].includes(date)) return 'th'
+
+  switch (date % 10) {
+    case 1: return 'st'
+    case 2: return 'nd'
+    case 3: return 'rd'
+    default: return 'th'
+  }
 }
-function century (d: Date) {
-  return parseInt(d.getFullYear().toString().substring(0, 2), 10)
+function century (d: LiquidDate) {
+  return Math.floor(d.getFullYear() / 100)
 }
 
 // default to 0
-const padWidths = {
+const padWidths: Record<string, number> = {
+  C: 2,
   d: 2,
   e: 2,
   H: 2,
@@ -73,98 +61,93 @@ const padWidths = {
   M: 2,
   S: 2,
   U: 2,
-  W: 2
+  W: 2,
+  y: 2
 }
 
-// default to '0'
-const padChars = {
-  a: ' ',
-  A: ' ',
-  b: ' ',
-  B: ' ',
-  c: ' ',
-  e: ' ',
-  k: ' ',
-  l: ' ',
-  p: ' ',
-  P: ' '
+const padSpaceChars = new Set('aAbBceklpP')
+
+function getTimezoneOffset (d: LiquidDate, opts: FormatOptions) {
+  const nOffset = Math.abs(d.getTimezoneOffset())
+  const h = Math.floor(nOffset / 60)
+  const m = nOffset % 60
+  return (d.getTimezoneOffset() > 0 ? '-' : '+') +
+    padStart(h, 2, '0') +
+    (opts.flags[':'] ? ':' : '') +
+    padStart(m, 2, '0')
 }
-const formatCodes = {
-  a: (d: Date) => dayNamesShort[d.getDay()],
-  A: (d: Date) => dayNames[d.getDay()],
-  b: (d: Date) => monthNamesShort[d.getMonth()],
-  B: (d: Date) => monthNames[d.getMonth()],
-  c: (d: Date) => d.toLocaleString(),
-  C: (d: Date) => century(d),
-  d: (d: Date) => d.getDate(),
-  e: (d: Date) => d.getDate(),
-  H: (d: Date) => d.getHours(),
-  I: (d: Date) => String(d.getHours() % 12 || 12),
-  j: (d: Date) => getDayOfYear(d),
-  k: (d: Date) => d.getHours(),
-  l: (d: Date) => String(d.getHours() % 12 || 12),
-  L: (d: Date) => d.getMilliseconds(),
-  m: (d: Date) => d.getMonth() + 1,
-  M: (d: Date) => d.getMinutes(),
-  N: (d: Date, opts: FormatOptions) => {
+type FormatCodeHandler = (d: LiquidDate, opts: FormatOptions) => unknown
+
+const formatCodes: Record<string, FormatCodeHandler> = {
+  a: (d: LiquidDate) => d.getShortWeekdayName(),
+  A: (d: LiquidDate) => d.getLongWeekdayName(),
+  b: (d: LiquidDate) => d.getShortMonthName(),
+  B: (d: LiquidDate) => d.getLongMonthName(),
+  c: (d: LiquidDate) => d.toLocaleString(),
+  C: (d: LiquidDate) => century(d),
+  d: (d: LiquidDate) => d.getDate(),
+  e: (d: LiquidDate) => d.getDate(),
+  H: (d: LiquidDate) => d.getHours(),
+  I: (d: LiquidDate) => String(d.getHours() % 12 || 12),
+  j: (d: LiquidDate) => getDayOfYear(d),
+  k: (d: LiquidDate) => d.getHours(),
+  l: (d: LiquidDate) => String(d.getHours() % 12 || 12),
+  L: (d: LiquidDate) => d.getMilliseconds(),
+  m: (d: LiquidDate) => d.getMonth() + 1,
+  M: (d: LiquidDate) => d.getMinutes(),
+  N: (d: LiquidDate, opts: FormatOptions) => {
     const width = Number(opts.width) || 9
-    const str = String(d.getMilliseconds()).substr(0, width)
+    const str = padStart(String(d.getMilliseconds()), 3, '0').slice(0, width)
+    opts.memoryLimit?.use(width - str.length)
     return padEnd(str, width, '0')
   },
-  p: (d: Date) => (d.getHours() < 12 ? 'AM' : 'PM'),
-  P: (d: Date) => (d.getHours() < 12 ? 'am' : 'pm'),
-  q: (d: Date) => getSuffix(d),
-  s: (d: Date) => Math.round(d.valueOf() / 1000),
-  S: (d: Date) => d.getSeconds(),
-  u: (d: Date) => d.getDay() || 7,
-  U: (d: Date) => getWeekOfYear(d, 0),
-  w: (d: Date) => d.getDay(),
-  W: (d: Date) => getWeekOfYear(d, 1),
-  x: (d: Date) => d.toLocaleDateString(),
-  X: (d: Date) => d.toLocaleTimeString(),
-  y: (d: Date) => d.getFullYear().toString().substring(2, 4),
-  Y: (d: Date) => d.getFullYear(),
-  z: (d: Date, opts: FormatOptions) => {
-    const offset = d.getTimezoneOffset()
-    const nOffset = Math.abs(offset)
-    const h = Math.floor(nOffset / 60)
-    const m = nOffset % 60
-    return (offset > 0 ? '-' : '+') +
-      padStart(h, 2, '0') +
-      (opts.flags[':'] ? ':' : '') +
-      padStart(m, 2, '0')
-  },
+  p: (d: LiquidDate) => (d.getHours() < 12 ? 'AM' : 'PM'),
+  P: (d: LiquidDate) => (d.getHours() < 12 ? 'am' : 'pm'),
+  q: (d: LiquidDate) => ordinal(d),
+  s: (d: LiquidDate) => Math.floor(d.dateValue() / 1000),
+  S: (d: LiquidDate) => d.getSeconds(),
+  u: (d: LiquidDate) => d.getDay() || 7,
+  U: (d: LiquidDate) => getWeekOfYear(d, 0),
+  w: (d: LiquidDate) => d.getDay(),
+  W: (d: LiquidDate) => getWeekOfYear(d, 1),
+  x: (d: LiquidDate) => d.toLocaleDateString(),
+  X: (d: LiquidDate) => d.toLocaleTimeString(),
+  y: (d: LiquidDate) => (d.getFullYear() % 100 + 100) % 100,
+  Y: (d: LiquidDate) => d.getFullYear(),
+  z: getTimezoneOffset,
+  Z: (d: LiquidDate, opts: FormatOptions) => d.getTimeZoneName() || getTimezoneOffset(d, opts),
   't': () => '\t',
   'n': () => '\n',
   '%': () => '%'
-};
-(formatCodes as any).h = formatCodes.b
+}
+formatCodes.h = formatCodes.b
 
-export default function (d: Date, formatStr: string) {
+export function strftime (d: LiquidDate, formatStr: string, memoryLimit?: Pick<Limiter, 'use'>) {
   let output = ''
   let remaining = formatStr
   let match
   while ((match = rFormat.exec(remaining))) {
     output += remaining.slice(0, match.index)
     remaining = remaining.slice(match.index + match[0].length)
-    output += format(d, match)
+    output += format(d, match, memoryLimit)
   }
   return output + remaining
 }
 
-function format (d: Date, match: RegExpExecArray) {
+function format (d: LiquidDate, match: RegExpExecArray, memoryLimit?: Pick<Limiter, 'use'>) {
   const [input, flagStr = '', width, modifier, conversion] = match
   const convert = formatCodes[conversion]
   if (!convert) return input
-  const flags = {}
+  const flags: Record<string, boolean> = {}
   for (const flag of flagStr) flags[flag] = true
-  let ret = String(convert(d, { flags, width, modifier }))
-  let padChar = padChars[conversion] || '0'
-  let padWidth = width || padWidths[conversion] || 0
+  let ret = String(convert(d, { flags, width, modifier, memoryLimit }))
+  let padChar = padSpaceChars.has(conversion) ? ' ' : '0'
+  let padWidth = Number(width) || padWidths[conversion] || 0
   if (flags['^']) ret = ret.toUpperCase()
   else if (flags['#']) ret = changeCase(ret)
   if (flags['_']) padChar = ' '
   else if (flags['0']) padChar = '0'
   if (flags['-']) padWidth = 0
+  memoryLimit?.use(Number(padWidth) - ret.length)
   return padStart(ret, padWidth, padChar)
 }

@@ -1,15 +1,5 @@
-import { OperatorToken } from '../tokens/operator-token'
-import { DelimitedToken } from '../tokens/delimited-token'
-import { WordToken } from '../tokens/word-token'
-import { TagToken } from '../tokens/tag-token'
-import { HTMLToken } from '../tokens/html-token'
-import { OutputToken } from '../tokens/output-token'
-import { PropertyAccessToken } from '../tokens/property-access-token'
-import { LiteralToken } from '../tokens/literal-token'
-import { QuotedToken } from '../tokens/quoted-token'
-import { NumberToken } from '../tokens/number-token'
-import { RangeToken } from '../tokens/range-token'
-import { TokenKind } from '../parser/token-kind'
+import { RangeToken, NumberToken, QuotedToken, LiteralToken, PropertyAccessToken, OutputToken, HTMLToken, TagToken, IdentifierToken, DelimitedToken, OperatorToken, ValueToken, FilteredValueToken } from '../tokens'
+import { TokenKind } from '../parser'
 
 export function isDelimitedToken (val: any): val is DelimitedToken {
   return !!(getKind(val) & TokenKind.Delimited)
@@ -47,12 +37,21 @@ export function isPropertyAccessToken (val: any): val is PropertyAccessToken {
   return getKind(val) === TokenKind.PropertyAccess
 }
 
-export function isWordToken (val: any): val is WordToken {
+export function isWordToken (val: any): val is IdentifierToken {
   return getKind(val) === TokenKind.Word
 }
 
 export function isRangeToken (val: any): val is RangeToken {
   return getKind(val) === TokenKind.Range
+}
+
+export function isFilteredValueToken (val: any): val is FilteredValueToken {
+  return getKind(val) === TokenKind.FilteredValue
+}
+
+export function isValueToken (val: any): val is ValueToken {
+  // valueTokenBitMask = TokenKind.Number | TokenKind.Literal | TokenKind.Quoted | TokenKind.PropertyAccess | TokenKind.Range | TokenKind.FilteredValue
+  return (getKind(val) & 5763) > 0
 }
 
 function getKind (val: any) {

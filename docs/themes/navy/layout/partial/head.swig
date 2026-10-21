@@ -1,10 +1,11 @@
-<head prefix="og: http://ogp.me/ns#">
+<head prefix="og: https://ogp.me/ns#">
   <meta charset="utf-8">
   <title>{% if page.title %}{{ page.title }} | {% endif %}{{ config.title }}</title>
   <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{ page.description | default(config.description) }}">
   <link rel="dns-prefetch" href="https://cdn.jsdelivr.net/">
-  <link rel="manifest" href="/manifest.json">
+  <link rel="manifest" href="{% if page.lang != "en" %}/{{page.lang}}{% endif %}/manifest.json">
   <!-- Canonical links -->
   <link rel="canonical" href="{{ url }}">
   <!-- Alternative links -->
@@ -31,4 +32,7 @@
   <meta name="msapplication-TileImage" content="{{ url_for('icon/mstile-144x144.png') }}">
   {{ css('css/navy') }}
   {{ feed_tag('atom.xml') }}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orestbida/cookieconsent@3.1.0/dist/cookieconsent.css">
+  <script src="https://cdn.jsdelivr.net/gh/orestbida/cookieconsent@3.1.0/dist/cookieconsent.umd.js"></script>
+  {{ js('js/cookieconsent-config') }}
 </head>

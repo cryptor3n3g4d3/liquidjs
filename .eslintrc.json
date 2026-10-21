@@ -7,17 +7,23 @@
     "node": true
   },
   "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "project": "tsconfig.json"
+  },
   "plugins": [
+    "deprecation",
     "mocha",
     "standard",
     "@typescript-eslint",
     "promise"
   ],
   "rules": {
+    "deprecation/deprecation": "error",
     "no-var": 2,
     "prefer-const": 2,
     "no-unused-vars": "off",
     "indent": "off",
+    "no-mixed-operators": "off",
     "no-dupe-class-members": "off",
     "no-useless-constructor": "off",
     "@typescript-eslint/indent": ["error", 2],
@@ -32,9 +38,19 @@
     "@typescript-eslint/no-unused-vars": ["error", { "vars": "all", "args": "none", "ignoreRestSiblings": false }]
   },
   "overrides": [{
-    "files": ["**/*.js", "*.js"],
+    "files": ["**/filters/*.ts"],
+    "rules": {
+      "camelcase": "off"
+    }
+  }, {
+    "files": ["**/*.js", "**/*.mjs"],
     "rules": {
       "@typescript-eslint/no-var-requires": "off"
+    }
+  }, {
+    "files": ["test/**/*.ts"],
+    "rules": {
+      "deprecation/deprecation": "off"
     }
   }]
 }

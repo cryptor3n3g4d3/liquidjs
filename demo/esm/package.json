@@ -1,0 +1,14 @@
+{
+  "name": "liquidjs-demo-esm",
+  "description": "Node.js demo for liquidjs",
+  "private": true,
+  "main": "index.mjs",
+  "scripts": {
+    "test": "./test.sh",
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "hello-liquid": "^1.0.0",
+    "liquidjs": "latest"
+  }
+}

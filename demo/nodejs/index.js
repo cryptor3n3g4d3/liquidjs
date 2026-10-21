@@ -1,26 +1,41 @@
-const { Liquid } = require('liquidjs')
+const { Liquid, Tag, Value } = require('liquidjs')
 
 const engine = new Liquid({
+  extname: '.liquid',
+  globals: { title: 'NodeJS Demo for LiquidJS' },
+  // root files for `.render()` and `.parse()`
   root: __dirname,
-  extname: '.liquid'
+  // layout files for `{% layout %}`
+  layouts: './layouts',
+  // partial files for `{% include %}` and `{% render %}`
+  partials: './partials'
 })
 
-engine.registerTag('header', {
-  parse: function (token) {
-    const [key, val] = token.args.split(':')
-    this[key] = val
-  },
-  render: async function (scope, emitter) {
-    const title = await this.liquid.evalValue(this.content, scope)
+engine.registerTag('header', class HeaderTag extends Tag {
+  constructor (token, remainTokens, liquid) {
+    super(token, remainTokens, liquid)
+    this.value = new Value(token.args, liquid)
+  }
+  * render (ctx, emitter) {
+    const title = yield this.value.value(ctx)
     emitter.write(`<h1>${title}</h1>`)
   }
 })
 
 const ctx = {
-  todos: ['fork and clone', 'make it better', 'make a pull request'],
-  title: 'Welcome to liquidjs!'
+  todos: ['fork and clone', 'make it better', 'make a pull request']
 }
 
-engine.renderFile('todolist', ctx)
-  .then(console.log)
-  .catch(err => console.error(err.stack))
+async function main () {
+  console.log('==========renderFile===========')
+  const html = await engine.renderFile('todolist', ctx)
+  console.log(html)
+
+  console.log('===========Streamed===========')
+  const tpls = await engine.parseFile('todolist')
+  engine.renderToNodeStream(tpls, ctx)
+    .on('data', data => process.stdout.write(data))
+    .on('end', () => console.log(''))
+}
+
+main()

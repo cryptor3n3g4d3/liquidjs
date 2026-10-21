@@ -1,153 +1,216 @@
-import { Context } from './context/context'
-import * as fs from './fs/node'
-import { forOwn, snakeCase } from './util/underscore'
-import { Template } from './template/template'
-import { Tokenizer } from './parser/tokenizer'
-import { Render } from './render/render'
-import Parser from './parser/parser'
-import { TagImplOptions } from './template/tag/tag-impl-options'
-import { Value } from './template/value'
-import builtinTags from './builtin/tags'
-import * as builtinFilters from './builtin/filters'
-import { TagMap } from './template/tag/tag-map'
-import { FilterMap } from './template/filter/filter-map'
-import { LiquidOptions, normalizeStringArray, NormalizedFullOptions, applyDefault, normalize } from './liquid-options'
-import { FilterImplOptions } from './template/filter/filter-impl-options'
-import { FS } from './fs/fs'
-import { toThenable, toValue } from './util/async'
-
-export * from './types'
+import { Context } from './context'
+import { toPromise, toValueSync, isFunction, forOwn, isString, strictUniq } from './util'
+import { TagClass, createTagClass, TagImplOptions, FilterImplOptions, Template, Value, StaticAnalysisOptions, StaticAnalysis, analyze, analyzeSync, SegmentArray } from './template'
+import { LookupType } from './fs/loader'
+import { Render } from './render'
+import { Parser } from './parser'
+import { tags } from './tags'
+import { filters } from './filters'
+import { LiquidOptions, normalizeDirectoryList, NormalizedFullOptions, normalize, RenderOptions, RenderFileOptions } from './liquid-options'
 
 export class Liquid {
-  public options: NormalizedFullOptions
-  public renderer: Render
-  public parser: Parser
-  public filters: FilterMap
-  public tags: TagMap
-  private fs: FS
+  public readonly options: NormalizedFullOptions
+  public readonly renderer = new Render()
+  /**
+   * @deprecated will be removed. In tags use `this.parser` instead
+   */
+  public readonly parser: Parser
+  public readonly filters: Record<string, FilterImplOptions> = Object.create(null)
+  public readonly tags: Record<string, TagClass> = Object.create(null)
 
   public constructor (opts: LiquidOptions = {}) {
-    this.options = applyDefault(normalize(opts))
+    this.options = normalize(opts)
+    // eslint-disable-next-line deprecation/deprecation
     this.parser = new Parser(this)
-    this.renderer = new Render()
-    this.fs = opts.fs || fs
-    this.filters = new FilterMap(this.options.strictFilters)
-    this.tags = new TagMap()
-
-    forOwn(builtinTags, (conf: TagImplOptions, name: string) => this.registerTag(snakeCase(name), conf))
-    forOwn(builtinFilters, (handler: FilterImplOptions, name: string) => this.registerFilter(snakeCase(name), handler))
+    forOwn(tags, (conf: TagClass, name: string) => this.registerTag(name, conf))
+    forOwn(filters, (handler: FilterImplOptions, name: string) => this.registerFilter(name, handler))
   }
   public parse (html: string, filepath?: string): Template[] {
-    const tokenizer = new Tokenizer(html, filepath)
-    const tokens = tokenizer.readTopLevelTokens(this.options)
-    return this.parser.parse(tokens)
+    const parser = new Parser(this)
+    return parser.parse(html, filepath)
   }
 
-  public _render (tpl: Template[], scope?: object, opts?: LiquidOptions, sync?: boolean): IterableIterator<string> {
-    const options = { ...this.options, ...normalize(opts) }
-    const ctx = new Context(scope, options, sync)
+  public _render (tpl: Template[], scope: Context | object | undefined, renderOptions: RenderOptions): IterableIterator<any> {
+    const ctx = scope instanceof Context ? scope : new Context(scope, this.options, renderOptions, { liquid: this })
     return this.renderer.renderTemplates(tpl, ctx)
   }
-  public async render (tpl: Template[], scope?: object, opts?: LiquidOptions): Promise<string> {
-    return toThenable(this._render(tpl, scope, opts, false))
+  public async render (tpl: Template[], scope?: object, renderOptions?: RenderOptions): Promise<any> {
+    return toPromise(this._render(tpl, scope, { ...renderOptions, sync: false }))
   }
-  public renderSync (tpl: Template[], scope?: object, opts?: LiquidOptions): string {
-    return toValue(this._render(tpl, scope, opts, true))
+  public renderSync (tpl: Template[], scope?: object, renderOptions?: RenderOptions): any {
+    return toValueSync(this._render(tpl, scope, { ...renderOptions, sync: true }))
+  }
+  public renderToNodeStream (tpl: Template[], scope?: object, renderOptions: RenderOptions = {}): NodeJS.ReadableStream {
+    const ctx = new Context(scope, this.options, renderOptions, { liquid: this })
+    return this.renderer.renderTemplatesToNodeStream(tpl, ctx)
   }
 
-  public _parseAndRender (html: string, scope?: object, opts?: LiquidOptions, sync?: boolean): IterableIterator<string> {
+  public _parseAndRender (html: string, scope: Context | object | undefined, renderOptions: RenderOptions): IterableIterator<any> {
     const tpl = this.parse(html)
-    return this._render(tpl, scope, opts, sync)
+    return this._render(tpl, scope, renderOptions)
   }
-  public async parseAndRender (html: string, scope?: object, opts?: LiquidOptions): Promise<string> {
-    return toThenable(this._parseAndRender(html, scope, opts, false))
+  public async parseAndRender (html: string, scope?: Context | object, renderOptions?: RenderOptions): Promise<any> {
+    return toPromise(this._parseAndRender(html, scope, { ...renderOptions, sync: false }))
   }
-  public parseAndRenderSync (html: string, scope?: object, opts?: LiquidOptions): string {
-    return toValue(this._parseAndRender(html, scope, opts, true))
-  }
-
-  public * _parseFile (file: string, opts?: LiquidOptions, sync?: boolean) {
-    const options = { ...this.options, ...normalize(opts) }
-    const paths = options.root.map(root => this.fs.resolve(root, file, options.extname))
-    if (this.fs.fallback !== undefined) {
-      const filepath = this.fs.fallback(file)
-      if (filepath !== undefined) paths.push(filepath)
-    }
-
-    for (const filepath of paths) {
-      const { cache } = options
-      if (cache) {
-        const tpls = yield cache.read(filepath)
-        if (tpls) return tpls
-      }
-      if (!(sync ? this.fs.existsSync(filepath) : yield this.fs.exists(filepath))) continue
-      const tpl = this.parse(sync ? this.fs.readFileSync(filepath) : yield this.fs.readFile(filepath), filepath)
-      if (cache) cache.write(filepath, tpl)
-      return tpl
-    }
-    throw this.lookupError(file, options.root)
-  }
-  public async parseFile (file: string, opts?: LiquidOptions): Promise<Template[]> {
-    return toThenable(this._parseFile(file, opts, false))
-  }
-  public parseFileSync (file: string, opts?: LiquidOptions): Template[] {
-    return toValue(this._parseFile(file, opts, true))
-  }
-  public async renderFile (file: string, ctx?: object, opts?: LiquidOptions) {
-    const templates = await this.parseFile(file, opts)
-    return this.render(templates, ctx, opts)
-  }
-  public renderFileSync (file: string, ctx?: object, opts?: LiquidOptions) {
-    const options = normalize(opts)
-    const templates = this.parseFileSync(file, options)
-    return this.renderSync(templates, ctx, opts)
+  public parseAndRenderSync (html: string, scope?: Context | object, renderOptions?: RenderOptions): any {
+    return toValueSync(this._parseAndRender(html, scope, { ...renderOptions, sync: true }))
   }
 
-  public _evalValue (str: string, ctx: Context): IterableIterator<any> {
-    const value = new Value(str, this.filters)
+  public _parsePartialFile (file: string, sync?: boolean, currentFile?: string) {
+    return new Parser(this).parseFile(file, sync, LookupType.Partials, currentFile)
+  }
+  public _parseLayoutFile (file: string, sync?: boolean, currentFile?: string) {
+    return new Parser(this).parseFile(file, sync, LookupType.Layouts, currentFile)
+  }
+  public _parseFile (file: string, sync?: boolean, lookupType?: LookupType, currentFile?: string): Generator<unknown, Template[]> {
+    return new Parser(this).parseFile(file, sync, lookupType, currentFile)
+  }
+  public async parseFile (file: string, lookupType?: LookupType): Promise<Template[]> {
+    return toPromise<Template[]>(new Parser(this).parseFile(file, false, lookupType))
+  }
+  public parseFileSync (file: string, lookupType?: LookupType): Template[] {
+    return toValueSync<Template[]>(new Parser(this).parseFile(file, true, lookupType))
+  }
+  public * _renderFile (file: string, ctx: Context | object | undefined, renderFileOptions: RenderFileOptions): Generator<any> {
+    const templates = (yield this._parseFile(file, renderFileOptions.sync, renderFileOptions.lookupType)) as Template[]
+    return yield this._render(templates, ctx, renderFileOptions)
+  }
+  public async renderFile (file: string, ctx?: Context | object, renderFileOptions?: RenderFileOptions) {
+    return toPromise(this._renderFile(file, ctx, { ...renderFileOptions, sync: false }))
+  }
+  public renderFileSync (file: string, ctx?: Context | object, renderFileOptions?: RenderFileOptions) {
+    return toValueSync(this._renderFile(file, ctx, { ...renderFileOptions, sync: true }))
+  }
+  public async renderFileToNodeStream (file: string, scope?: object, renderOptions?: RenderOptions) {
+    const templates = await this.parseFile(file)
+    return this.renderToNodeStream(templates, scope, renderOptions)
+  }
+
+  public _evalValue (str: string, scope?: object | Context): IterableIterator<any> {
+    const value = new Value(str, this)
+    const ctx = scope instanceof Context ? scope : new Context(scope, this.options, {}, { liquid: this })
     return value.value(ctx)
   }
-  public async evalValue (str: string, ctx: Context): Promise<any> {
-    return toThenable(this._evalValue(str, ctx))
+  public async evalValue (str: string, scope?: object | Context): Promise<any> {
+    return toPromise(this._evalValue(str, scope))
   }
-  public evalValueSync (str: string, ctx: Context): any {
-    return toValue(this._evalValue(str, ctx))
+  public evalValueSync (str: string, scope?: object | Context): any {
+    return toValueSync(this._evalValue(str, scope))
   }
 
   public registerFilter (name: string, filter: FilterImplOptions) {
-    this.filters.set(name, filter)
+    this.filters[name] = filter
   }
-  public registerTag (name: string, tag: TagImplOptions) {
-    this.tags.set(name, tag)
+  public unregisterFilter (name: string) {
+    delete this.filters[name]
+  }
+  public registerTag (name: string, tag: TagClass | TagImplOptions) {
+    this.tags[name] = isFunction(tag) ? tag : createTagClass(tag)
   }
   public plugin (plugin: (this: Liquid, L: typeof Liquid) => void) {
     return plugin.call(this, Liquid)
   }
   public express () {
     const self = this // eslint-disable-line
+    let firstCall = true
+
     return function (this: any, filePath: string, ctx: object, callback: (err: Error | null, rendered: string) => void) {
-      const opts = { root: [...normalizeStringArray(this.root), ...self.options.root] }
-      self.renderFile(filePath, ctx, opts).then(html => callback(null, html) as any, callback as any)
+      if (firstCall) {
+        firstCall = false
+        const dirs = normalizeDirectoryList(this.root)
+        self.options.root.unshift(...dirs)
+        self.options.layouts.unshift(...dirs)
+        self.options.partials.unshift(...dirs)
+      }
+      self.renderFile(filePath, ctx).then(html => callback(null, html) as any, callback as any)
     }
   }
 
-  private lookupError (file: string, roots: string[]) {
-    const err = new Error('ENOENT') as any
-    err.message = `ENOENT: Failed to lookup "${file}" in "${roots}"`
-    err.code = 'ENOENT'
-    return err
+  public async analyze (template: Template[], options: StaticAnalysisOptions = {}): Promise<StaticAnalysis> {
+    return analyze(template, options)
   }
 
-  /**
-   * @deprecated use parseFile instead
-   */
-  public async getTemplate (file: string, opts?: LiquidOptions): Promise<Template[]> {
-    return this.parseFile(file, opts)
+  public analyzeSync (template: Template[], options: StaticAnalysisOptions = {}): StaticAnalysis {
+    return analyzeSync(template, options)
   }
-  /**
-   * @deprecated use parseFileSync instead
-   */
-  public getTemplateSync (file: string, opts?: LiquidOptions): Template[] {
-    return this.parseFileSync(file, opts)
+
+  public async parseAndAnalyze (html: string, filename?: string, options: StaticAnalysisOptions = {}): Promise<StaticAnalysis> {
+    return analyze(this.parse(html, filename), options)
+  }
+
+  public parseAndAnalyzeSync (html: string, filename?: string, options: StaticAnalysisOptions = {}): StaticAnalysis {
+    return analyzeSync(this.parse(html, filename), options)
+  }
+
+  /** Return an array of all variables without their properties. */
+  public async variables (template: string | Template[], options: StaticAnalysisOptions = {}): Promise<string[]> {
+    const analysis = await analyze(isString(template) ? this.parse(template) : template, options)
+    return Object.keys(analysis.variables)
+  }
+
+  /** Return an array of all variables without their properties. */
+  public variablesSync (template: string | Template[], options: StaticAnalysisOptions = {}): string[] {
+    const analysis = analyzeSync(isString(template) ? this.parse(template) : template, options)
+    return Object.keys(analysis.variables)
+  }
+
+  /** Return an array of all variables including their properties/paths. */
+  public async fullVariables (template: string | Template[], options: StaticAnalysisOptions = {}): Promise<string[]> {
+    const analysis = await analyze(isString(template) ? this.parse(template) : template, options)
+    return Array.from(new Set(Object.values(analysis.variables).flatMap((a) => a.map((v) => String(v)))))
+  }
+
+  /** Return an array of all variables including their properties/paths. */
+  public fullVariablesSync (template: string | Template[], options: StaticAnalysisOptions = {}): string[] {
+    const analysis = analyzeSync(isString(template) ? this.parse(template) : template, options)
+    return Array.from(new Set(Object.values(analysis.variables).flatMap((a) => a.map((v) => String(v)))))
+  }
+
+  /** Return an array of all variables, each as an array of properties/segments. */
+  public async variableSegments (template: string | Template[], options: StaticAnalysisOptions = {}): Promise<Array<SegmentArray>> {
+    const analysis = await analyze(isString(template) ? this.parse(template) : template, options)
+    return Array.from(strictUniq(Object.values(analysis.variables).flatMap((a) => a.map((v) => v.toArray()))))
+  }
+
+  /** Return an array of all variables, each as an array of properties/segments. */
+  public variableSegmentsSync (template: string | Template[], options: StaticAnalysisOptions = {}): Array<SegmentArray> {
+    const analysis = analyzeSync(isString(template) ? this.parse(template) : template, options)
+    return Array.from(strictUniq(Object.values(analysis.variables).flatMap((a) => a.map((v) => v.toArray()))))
+  }
+
+  /** Return an array of all expected context variables without their properties. */
+  public async globalVariables (template: string | Template[], options: StaticAnalysisOptions = {}): Promise<string[]> {
+    const analysis = await analyze(isString(template) ? this.parse(template) : template, options)
+    return Object.keys(analysis.globals)
+  }
+
+  /** Return an array of all expected context variables without their properties. */
+  public globalVariablesSync (template: string | Template[], options: StaticAnalysisOptions = {}): string[] {
+    const analysis = analyzeSync(isString(template) ? this.parse(template) : template, options)
+    return Object.keys(analysis.globals)
+  }
+
+  /** Return an array of all expected context variables including their properties/paths. */
+  public async globalFullVariables (template: string | Template[], options: StaticAnalysisOptions = {}): Promise<string[]> {
+    const analysis = await analyze(isString(template) ? this.parse(template) : template, options)
+    return Array.from(new Set(Object.values(analysis.globals).flatMap((a) => a.map((v) => String(v)))))
+  }
+
+  /** Return an array of all expected context variables including their properties/paths. */
+  public globalFullVariablesSync (template: string | Template[], options: StaticAnalysisOptions = {}): string[] {
+    const analysis = analyzeSync(isString(template) ? this.parse(template) : template, options)
+    return Array.from(new Set(Object.values(analysis.globals).flatMap((a) => a.map((v) => String(v)))))
+  }
+
+  /** Return an array of all expected context variables, each as an array of properties/segments. */
+  public async globalVariableSegments (template: string | Template[], options: StaticAnalysisOptions = {}): Promise<Array<SegmentArray>> {
+    const analysis = await analyze(isString(template) ? this.parse(template) : template, options)
+    return Array.from(strictUniq(Object.values(analysis.globals).flatMap((a) => a.map((v) => v.toArray()))))
+  }
+
+  /** Return an array of all expected context variables, each as an array of properties/segments. */
+  public globalVariableSegmentsSync (template: string | Template[], options: StaticAnalysisOptions = {}): Array<SegmentArray> {
+    const analysis = analyzeSync(isString(template) ? this.parse(template) : template, options)
+    return Array.from(strictUniq(Object.values(analysis.globals).flatMap((a) => a.map((v) => v.toArray()))))
   }
 }

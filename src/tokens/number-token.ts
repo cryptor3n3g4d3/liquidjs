@@ -1,12 +1,15 @@
 import { Token } from './token'
-import { WordToken } from './word-token'
-import { TokenKind } from '../parser/token-kind'
+import { TokenKind } from '../parser'
 
 export class NumberToken extends Token {
+  public content: number
   constructor (
-    public whole: WordToken,
-    public decimal?: WordToken
+    public input: string,
+    public begin: number,
+    public end: number,
+    public file?: string
   ) {
-    super(TokenKind.Number, whole.input, whole.begin, decimal ? decimal.end : whole.end, whole.file)
+    super(TokenKind.Number, input, begin, end, file)
+    this.content = Number(this.getText())
   }
 }

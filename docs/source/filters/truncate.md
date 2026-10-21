@@ -2,6 +2,8 @@
 title: truncate
 ---
 
+{% since %}v1.9.1{% endsince %}
+
 Shortens a string down to the number of characters passed as an argument. If the specified number of characters is less than the length of the string, an ellipsis (...) is appended to the string and is included in the character count.
 
 ## Basic Usage
@@ -34,7 +36,7 @@ Ground control, and so on
 
 ## No ellipsis
 
-You can truncate to the exact number of characters specified by the first argument and avoid showing trailing characters by passing a blank string as the second argument:
+You can `truncate` to the exact number of characters specified by the first argument and avoid showing trailing characters by passing a blank string as the second argument:
 
 Input
 ```liquid

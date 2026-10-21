@@ -2,26 +2,40 @@ import * as _ from './underscore'
 import { Token } from '../tokens/token'
 import { Template } from '../template/template'
 
-abstract class LiquidError extends Error {
-  private token: Token
-  private originalError: Error
-  public constructor (err: Error, token: Token) {
-    super(err.message)
-    this.originalError = err
-    this.token = token
+/**
+ * targeting ES5, extends Error won't create a proper prototype chain, need a trait to keep track of classes
+ */
+const TRAIT = '__liquidClass__'
+
+export abstract class LiquidError extends Error {
+  public token!: Token
+  public context = ''
+  public originalError?: Error
+  public constructor (err: Error | string, token: Token) {
+    /**
+     * note: for ES5 targeting, `this` will be replaced by return value of Error(),
+     * thus everything on `this` will be lost, avoid calling `LiquidError` methods here
+     */
+    super(typeof err === 'string' ? err : err.message)
+    if (typeof err !== 'string') Object.defineProperty(this, 'originalError', { value: err, enumerable: false })
+    Object.defineProperty(this, 'token', { value: token, enumerable: false })
+    Object.defineProperty(this, TRAIT, { value: 'LiquidError', enumerable: false })
   }
   protected update () {
-    const err = this.originalError
-    const context = mkContext(this.token)
-    this.message = mkMessage(err.message, this.token)
-    this.stack = this.message + '\n' + context +
-      '\n' + this.stack + '\nFrom ' + err.stack
+    Object.defineProperty(this, 'context', { value: mkContext(this.token), enumerable: false })
+    this.message = mkMessage(this.message, this.token)
+    this.stack = this.message + '\n' + this.context +
+      '\n' + this.stack
+    if (this.originalError) this.stack += '\nFrom ' + this.originalError.stack
+  }
+  static is (obj: unknown): obj is LiquidError {
+    return (obj as Record<string, unknown> | null | undefined)?.[TRAIT] === 'LiquidError'
   }
 }
 
 export class TokenizationError extends LiquidError {
   public constructor (message: string, token: Token) {
-    super(new Error(message), token)
+    super(message, token)
     this.name = 'TokenizationError'
     super.update()
   }
@@ -44,7 +58,41 @@ export class RenderError extends LiquidError {
     super.update()
   }
   public static is (obj: any): obj is RenderError {
-    return obj instanceof RenderError
+    return obj.name === 'RenderError'
+  }
+}
+
+export class LiquidErrors extends LiquidError {
+  public constructor (public errors: RenderError[]) {
+    super(errors[0], errors[0].token)
+    this.name = 'LiquidErrors'
+    const s = errors.length > 1 ? 's' : ''
+    this.message = `${errors.length} error${s} found`
+    super.update()
+  }
+  public static is (obj: any): obj is LiquidErrors {
+    return obj.name === 'LiquidErrors'
+  }
+}
+
+export class UndefinedVariableError extends LiquidError {
+  public constructor (err: Error, token: Token) {
+    super(err, token)
+    this.name = 'UndefinedVariableError'
+    this.message = err.message
+    super.update()
+  }
+}
+
+// only used internally; raised where we don't have token information,
+// so it can't be an UndefinedVariableError.
+export class InternalUndefinedVariableError extends Error {
+  variableName: string
+
+  public constructor (variableName: string) {
+    super(`undefined variable: ${variableName}`)
+    this.name = 'InternalUndefinedVariableError'
+    this.variableName = variableName
   }
 }
 
@@ -57,7 +105,7 @@ export class AssertionError extends Error {
 }
 
 function mkContext (token: Token) {
-  const [line] = token.getPosition()
+  const [line, col] = token.getPosition()
   const lines = token.input.split('\n')
   const begin = Math.max(line - 2, 1)
   const end = Math.min(line + 3, lines.length)
@@ -65,10 +113,17 @@ function mkContext (token: Token) {
   const context = _
     .range(begin, end + 1)
     .map(lineNumber => {
-      const indicator = (lineNumber === line) ? '>> ' : '   '
+      const rowIndicator = (lineNumber === line) ? '>> ' : '   '
       const num = _.padStart(String(lineNumber), String(end).length)
-      const text = lines[lineNumber - 1]
-      return `${indicator}${num}| ${text}`
+      let text = `${rowIndicator}${num}| `
+
+      const colIndicator = lineNumber === line
+        ? '\n' + _.padStart('^', col + text.length)
+        : ''
+
+      text += lines[lineNumber - 1]
+      text += colIndicator
+      return text
     })
     .join('\n')
 

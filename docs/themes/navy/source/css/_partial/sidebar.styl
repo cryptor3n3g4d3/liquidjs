@@ -1,7 +1,6 @@
 #sidebar
   width: sidebar-width
   padding-bottom: 40px
-  opacity: 0.8
   display: none
   @media mq-normal
     display: block
@@ -11,22 +10,23 @@
   margin-top: 40px
   padding: 10px 0
   font-weight: bold
-  color: color-link
+  color: var(--color-link)
   display: inline-block
-  border-top: 1px solid color-border
+  border-top: 1px solid var(--color-border)
   line-height: 1
 .sidebar-title:first-child
   margin-top: 0
 
 .sidebar-link
   display: block
-  color: color-default
+  color: var(--color-default)
   text-decoration: none
   padding: 7px 0
   line-height: 1
   position: relative
   width: 100%
+  transition: color 0.15s
   &.current
-    color: color-link
+    color: var(--color-link)
   &:hover
-    color: color-link-hover
+    color: var(--color-link-hover)

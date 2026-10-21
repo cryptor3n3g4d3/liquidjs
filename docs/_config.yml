@@ -1,6 +1,6 @@
 title: LiquidJS
-subtitle: "A simple, expressive and safe template engine."
-description: "LiquidJS is a simple, expressive and safe template engine."
+subtitle: "A simple, expressive, extensible Liquid template engine for JavaScript"
+description: "A simple, expressive, extensible Liquid template engine for JavaScript — Shopify, Jekyll and GitHub Pages compatible, for Node.js, browsers, and the CLI, with TypeScript support."
 author: Harttle
 language: en
 timezone: UTC
@@ -17,16 +17,20 @@ pretty_urls:
   trailing_html: false
 
 theme: navy
-
-highlight:
-  enable: true
-  line_number: false
+skip_render: "api/**"
+ignore: "api/**"
+include: "api/**"
+syntax_highlighter: prismjs
+prismjs:
+  preprocess: true
+  line_number: true
+  line_threshold: 0
+  tab_replace: ""
 
 algolia:
-  applicationID: 0X19J927JZ
-  apiKey: 533161d821384919672e4ce8a39451b3
+  applicationID: QJ35YOZTU4
+  apiKey: 8c6cbb824b4c5023f0bb2ef29e228bef
   indexName: liquidjs
 twitter: harttleharttle
 github: harttle/liquidjs
-patreon: harttle
 oc: liquidjs

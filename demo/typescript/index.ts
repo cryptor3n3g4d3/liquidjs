@@ -1,25 +1,25 @@
-import { Liquid, TagToken, Context, Emitter } from 'liquidjs'
+import { Value, Liquid, TagToken, Context, Emitter, Tag, TopLevelToken } from 'liquidjs'
 
 const engine = new Liquid({
-  root: __dirname,
+  root: process.cwd(),
   extname: '.liquid'
 })
 
-engine.registerTag('header', {
-  parse: function (token: TagToken) {
-    const [key, val] = token.args.split(':')
-    this[key] = val
-  },
-  render: async function (context: Context, emitter: Emitter) {
-    const title = await this.liquid.evalValue(this['content'], context)
+engine.registerTag('header', class HeaderTag extends Tag {
+  private value: Value
+  constructor (token: TagToken, remainTokens: TopLevelToken[], liquid: Liquid) {
+    super(token, remainTokens, liquid)
+    this.value = new Value(token.args, liquid)
+  }
+  * render (ctx: Context, emitter: Emitter) {
+    const title = yield this.value.value(ctx)
     emitter.write(`<h1>${title}</h1>`)
   }
 })
 
-const ctx = {
+const scope = {
   todos: ['fork and clone', 'make it better', 'make a pull request'],
-  title: 'Welcome to liquidjs!'
+  title: 'TypeScript Demo for LiquidJS!'
 }
 
-// console.log('isTruthy:', isTruthy('a string here'));
-engine.renderFile('todolist', ctx).then(console.log)
+engine.renderFile('todolist', scope).then(console.log)

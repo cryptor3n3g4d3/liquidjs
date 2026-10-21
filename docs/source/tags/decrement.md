@@ -1,6 +1,8 @@
 ---
-title: Decrement
+title: decrement
 ---
+
+{% since %}v1.9.1{% endsince %}
 
 Creates a new number variable, and decreases its value by one every time it is called. The first value is `-1`.
 

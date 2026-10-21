@@ -1,61 +1,64 @@
 // https://github.com/chriskempson/tomorrow-theme
-highlight-background = #fff
-highlight-current-line = #efefef
-highlight-selection = #d6d6d6
-highlight-foreground = #4d4d4c
-highlight-comment = #8e908c
-highlight-red = #c82829
-highlight-orange = #f5871f
-highlight-yellow = #eab700
-highlight-green = #718c00
-highlight-aqua = #3e999f
-highlight-blue = #4271ae
-highlight-purple = #8959a8
+// Light: GitHub-style; dark: Tomorrow Night Eighties (tuned for navy palette)
+// Palette tokens live in _variables.styl
 
 pre, code
   font-family: font-mono
-  color: highlight-foreground
-  background: #eee
+  color: var(--highlight-foreground)
+  background: var(--highlight-background)
+  white-space: pre-wrap
 
 code
   padding: 0 5px
+  border-radius: 4px
 
 pre
   padding: 10px 15px
   line-height: 22px
+  code-block-chrome()
   code
     border: none
     display: block
     padding: 0
+  &.line-numbers
+    white-space: pre
+    overflow-x: auto
 
 .highlight
-  background: #eee
   padding: 10px 15px
-  color: highlight-foreground
+  color: var(--highlight-foreground)
+  background: var(--highlight-background)
   overflow: auto
   margin: 0
+  code-block-chrome()
   table
     margin: 0 !important
     border: 0
-    th, td
+    .gutter, .code
       padding: 0
+    .gutter
+      padding-right: 12px
   figcaption
     clearfix()
     margin: -5px 0 5px
-    color: color-gray
+    color: var(--color-gray)
     a
       float: right
   pre
+    margin: 0
     padding: 0
-    border: none
     background: none
+    white-space: pre
+    border: none
+    box-shadow: none
+    border-radius: 0
   .line
     height: 22px
 
 pre
   .comment
   .title
-    color: highlight-comment
+    color: var(--highlight-comment)
   .variable
   .attribute
   .tag
@@ -68,27 +71,27 @@ pre
   .css .id
   .css .class
   .css .pseudo
-    color: highlight-red
+    color: var(--highlight-red)
   .number
   .preprocessor
   .built_in
   .literal
   .params
   .constant
-    color: highlight-orange
+    color: var(--highlight-orange)
   .class
   .ruby .class .title
   .css .rules .attribute
-    color: highlight-green
+    color: var(--highlight-green)
   .string
   .value
   .inheritance
   .header
   .ruby .symbol
   .xml .cdata
-    color: highlight-green
+    color: var(--highlight-green)
   .css .hexcolor
-    color: highlight-aqua
+    color: var(--highlight-aqua)
   .function
   .python .decorator
   .python .title
@@ -97,7 +100,24 @@ pre
   .perl .sub
   .javascript .title
   .coffeescript .title
-    color: highlight-blue
+    color: var(--highlight-blue)
   .keyword
   .javascript .function
-    color: highlight-purple
+    color: var(--highlight-purple)
+  // Prism bash: builtins (echo), external commands (npm), and cli-command (npx)
+  code.language-bash
+    .builtin,
+    .class-name,
+    .function,
+    .cli-command
+      color: var(--highlight-bash-command)
+    .operator
+      color: var(--highlight-purple)
+  code.language-shell
+    .builtin,
+    .class-name,
+    .function,
+    .cli-command
+      color: var(--highlight-bash-command)
+    .operator
+      color: var(--highlight-purple)

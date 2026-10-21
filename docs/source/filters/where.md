@@ -2,6 +2,8 @@
 title: where
 ---
 
+{% since %}v8.1.0{% endsince %}
+
 Creates an array including only the objects with a given property value, or any [truthy][truthy] value by default.
 
 In this example, assume you have a list of products and you want to show your kitchen products separately. Using `where`, you can create an array containing only the products that have a `"type"` of `"kitchen"`.
@@ -35,6 +37,7 @@ Kitchen products:
 ```
 
 Say instead you have a list of products and you only want to show those that are available to buy. You can `where` with a property name but no target value to include all products with a [truthy][truthy] `"available"` value.
+As a special case, the same will happen if the target value is given but evaluates to `undefined`.
 
 Input
 ```liquid
@@ -68,13 +71,64 @@ The `where` filter can also be used to find a single object in an array when com
 Input
 ```liquid
 {% assign new_shirt = products | where: "type", "shirt" | first %}
-
 Featured product: {{ new_shirt.title }}
 ```
 
 Output
 ```text
 Featured product: Hawaiian print sweater vest
+```
+
+Additionally, `property` can be any valid Liquid variable expression as used in output syntax, except that the scope of this expression is within each item. For the following `products` array:
+
+```javascript
+const products = [
+    { meta: { details: { class: 'A' } }, order: 1 },
+    { meta: { details: { class: 'B' } }, order: 2 },
+    { meta: { details: { class: 'B' } }, order: 3 }
+]
+```
+
+Input
+```liquid
+{% assign selected = products | where: 'meta.details["class"]', "B" %}
+{% for item in selected -%}
+- {{ item.order }}
+{% endfor %}
+```
+
+Output
+```text
+- 2
+- 3
+```
+
+## Jekyll style
+
+{% since %}v10.21.0{% endsince %}
+
+For Liquid users migrating from Jekyll, there's a `jekyllWhere` option to mimic the behavior of Jekyll's `where` filter. This option is set to `false` by default. When enabled, if `property` is an array, the target value is matched using `Array.includes` instead of `==`, which is particularly useful for filtering tags. Additionally, a target value of `undefined` is treated normally, entries matched are exactly those which are themselves `undefined`.
+
+This option affects other array selection filters as well, such as `reject` and `find`.
+
+```javascript
+const pages = [
+    { tags: ["cat", "food"], title: 'Cat Food' },
+    { tags: ["dog", "food"], title: 'Dog Food' },
+]
+```
+
+Input
+```liquid
+{% assign selected = pages | where: 'tags', "cat" %}
+{% for item in selected -%}
+- {{ item.title }}
+{% endfor %}
+```
+
+Output
+```text
+Cat Food
 ```
 
 [truthy]: ../tutorials/truthy-and-falsy.html
